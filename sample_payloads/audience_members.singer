@@ -1,0 +1,5 @@
+{"type":"SCHEMA","stream":"AudienceMembers","schema":{"type":["object","null"],"properties":{"externalId":{"type":["string","null"]},"productDestinationId":{"type":["string","null"]},"email":{"type":["string","null"]},"emails":{"type":["array","null"],"items":{"type":["string","null"]}},"phoneNumber":{"type":["string","null"]},"phoneNumbers":{"type":["array","null"],"items":{"type":["string","null"]}},"userIdentifiers":{"type":["array","null"]},"userData":{"type":["object","null"]},"compositeData":{"type":["object","null"]}}},"key_properties":[]}
+{"type":"RECORD","stream":"AudienceMembers","record":{"externalId":"member_1","productDestinationId":"9482344955","email":"alice.highvalue@example.com"}}
+{"type":"RECORD","stream":"AudienceMembers","record":{"externalId":"member_2","productDestinationId":"9482344955","email":"bob.highvalue@example.com","phoneNumber":"+15555550123"}}
+{"type":"RECORD","stream":"AudienceMembers","record":{"externalId":"member_3","productDestinationId":"9482344955","userIdentifiers":[{"emailAddress":"882cb38a32607b52bbbd8ba15c07464ace7ee78fab45c4de3fd933230cc59b74"}]}}
+{"type":"STATE","value":{}}
