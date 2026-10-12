@@ -9,7 +9,11 @@ from typing import Any
 
 from target_googleads.client import GoogleAdsBatchSink, GoogleAdsRecordSink
 
+_SECONDS_PER_DAY = 86400
 DEFAULT_MEMBERSHIP_DURATION = "2592000s"  # 30 days
+_INVALID_MEMBERSHIP_DURATION = (
+    "membershipDuration must be a whole number of days as {days * 86400}s"
+)
 DEFAULT_INGESTED_USER_LIST_INFO = {
     "contactIdInfo": {
         "dataSourceType": "DATA_SOURCE_TYPE_FIRST_PARTY",
@@ -21,6 +25,21 @@ _GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
 _INVALID_EMAIL = "Email address must be of the form user@domain"
 _INVALID_PHONE = "Phone number contains no digits"
 MAX_MEMBERS_PER_REQUEST = 10000
+
+
+def _membership_duration(value: str) -> str:
+    """Return a membership duration that is a whole number of days.
+
+    Google Data Manager requires ``{days * 86400}s``.
+    """
+    if not isinstance(value, str):
+        raise ValueError(_INVALID_MEMBERSHIP_DURATION)
+    seconds_text, suffix, remainder = value.partition("s")
+    if suffix != "s" or remainder or not seconds_text.isdigit():
+        raise ValueError(_INVALID_MEMBERSHIP_DURATION)
+    if int(seconds_text) % _SECONDS_PER_DAY:
+        raise ValueError(_INVALID_MEMBERSHIP_DURATION)
+    return value
 
 
 def _is_hashed(value: str) -> bool:
@@ -82,11 +101,15 @@ class AudiencesSink(GoogleAdsRecordSink):
         if not display_name:
             raise ValueError("Audiences records require displayName (or name)")
 
+        membership_duration = record.get("membershipDuration", DEFAULT_MEMBERSHIP_DURATION)
+        if membership_duration:
+            membership_duration = _membership_duration(membership_duration)
+
         payload = {
             "displayName": display_name,
             "description": record.get("description"),
             "integrationCode": record.get("integrationCode"),
-            "membershipDuration": record.get("membershipDuration", DEFAULT_MEMBERSHIP_DURATION),
+            "membershipDuration": membership_duration,
             "ingestedUserListInfo": record.get("ingestedUserListInfo")
             or DEFAULT_INGESTED_USER_LIST_INFO,
         }
