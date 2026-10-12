@@ -86,16 +86,17 @@ class AudiencesSink(GoogleAdsRecordSink):
             "displayName": display_name,
             "description": record.get("description"),
             "integrationCode": record.get("integrationCode"),
-            "membershipDuration": record.get(
-                "membershipDuration", DEFAULT_MEMBERSHIP_DURATION
-            ),
+            "membershipDuration": record.get("membershipDuration", DEFAULT_MEMBERSHIP_DURATION),
             "ingestedUserListInfo": record.get("ingestedUserListInfo")
             or DEFAULT_INGESTED_USER_LIST_INFO,
         }
         return self.clean_payload(payload)
 
     def upsert_record(self, record: dict, context: dict) -> tuple:
-        response = self.request_api("POST", request_data=record)
+        headers = {}
+        if self.login_account_id:
+            headers["login-account"] = f"accountTypes/GOOGLE_ADS/accounts/{self.login_account_id}"
+        response = self.request_api("POST", request_data=record, headers=headers)
         body = response.json() if response.content else {}
         # productDestinationId for later AudienceMembers ingest
         record_id = body.get("id")
@@ -144,16 +145,20 @@ class AudienceMembersSink(GoogleAdsBatchSink):
 
         results: list[dict[str, Any]] = []
         for product_destination_id, group in groups.items():
+            destination = {
+                "operatingAccount": {
+                    "accountType": "GOOGLE_ADS",
+                    "accountId": self.customer_id,
+                },
+                "productDestinationId": product_destination_id,
+            }
+            if self.login_account_id:
+                destination["loginAccount"] = {
+                    "accountType": "GOOGLE_ADS",
+                    "accountId": self.login_account_id,
+                }
             payload = {
-                "destinations": [
-                    {
-                        "operatingAccount": {
-                            "accountType": "GOOGLE_ADS",
-                            "accountId": self.customer_id,
-                        },
-                        "productDestinationId": product_destination_id,
-                    }
-                ],
+                "destinations": [destination],
                 "audienceMembers": [item["member"] for item in group],
                 "consent": {
                     "adUserData": "CONSENT_GRANTED",
@@ -241,20 +246,14 @@ class AudienceMembersSink(GoogleAdsBatchSink):
             phones = [phone, *phones]
         for phone_number in phones:
             if phone_number:
-                identifiers.append(
-                    {"phoneNumber": normalize_and_hash_phone(str(phone_number))}
-                )
+                identifiers.append({"phoneNumber": normalize_and_hash_phone(str(phone_number))})
 
         return identifiers
 
     def _normalize_user_identifier(self, identifier: dict) -> dict:
         normalized = dict(identifier)
         if normalized.get("emailAddress"):
-            normalized["emailAddress"] = normalize_and_hash_email(
-                str(normalized["emailAddress"])
-            )
+            normalized["emailAddress"] = normalize_and_hash_email(str(normalized["emailAddress"]))
         if normalized.get("phoneNumber"):
-            normalized["phoneNumber"] = normalize_and_hash_phone(
-                str(normalized["phoneNumber"])
-            )
+            normalized["phoneNumber"] = normalize_and_hash_phone(str(normalized["phoneNumber"]))
         return normalized

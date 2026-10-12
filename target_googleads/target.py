@@ -49,7 +49,16 @@ class TargetGoogleAds(TargetHotglue):
             "customer_id",
             th.StringType(),
             required=True,
-            description="Google Ads customer ID (with or without dashes)",
+            description="Google Ads customer ID that owns the audience (with or without dashes)",
+        ),
+        th.Property(
+            "login_account_id",
+            th.StringType(),
+            required=False,
+            description=(
+                "Google Ads manager (MCC) customer ID used to access customer_id. "
+                "Required when the OAuth user is on a manager account. Omit for direct access."
+            ),
         ),
         th.Property(
             "product_destination_id",

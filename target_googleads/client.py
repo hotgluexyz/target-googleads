@@ -31,6 +31,14 @@ class GoogleAdsSink(HotglueBaseSink):
         """Google Ads customer ID without dashes."""
         return str(self.config["customer_id"]).replace("-", "")
 
+    @property
+    def login_account_id(self) -> str | None:
+        """Manager account customer ID without dashes, when configured."""
+        login_account_id = self.config.get("login_account_id")
+        if not login_account_id:
+            return None
+        return str(login_account_id).replace("-", "")
+
 
 class GoogleAdsRecordSink(GoogleAdsSink, HotglueSink):
     """GoogleAds Record target sink class for record sinks."""
