@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Hotglue
 """GoogleAds target class."""
 
 from __future__ import annotations
@@ -72,7 +73,11 @@ class TargetGoogleAds(TargetHotglue):
     ).to_dict()
 
     @classmethod
-    def access_token_support(cls, connector=None):
+    def access_token_support(
+        cls,
+        _connector: object | None = None,
+    ) -> tuple[type[GoogleAdsAuthenticator], str]:
+        """Return the OAuth authenticator and Google token endpoint."""
         return (
             GoogleAdsAuthenticator,
             "https://oauth2.googleapis.com/token",

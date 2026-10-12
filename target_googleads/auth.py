@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Hotglue
 """Authentication helpers for GoogleAds."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Hotglue
 """GoogleAds target sink class, which handles writing streams."""
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ _HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 _GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
 _INVALID_EMAIL = "Email address must be of the form user@domain"
 _INVALID_PHONE = "Phone number contains no digits"
+_DISPLAY_NAME_REQUIRED = "Audiences records require displayName (or name)"
 MAX_MEMBERS_PER_REQUEST = 10000
 
 
@@ -43,7 +45,7 @@ def _membership_duration(value: str) -> str:
     Google Data Manager requires ``{days * 86400}s``.
     """
     if not isinstance(value, str):
-        raise ValueError(_INVALID_MEMBERSHIP_DURATION)
+        raise TypeError(_INVALID_MEMBERSHIP_DURATION)
     seconds_text, suffix, remainder = value.partition("s")
     if suffix != "s" or remainder or not seconds_text.isdigit():
         raise ValueError(_INVALID_MEMBERSHIP_DURATION)
@@ -106,10 +108,10 @@ class AudiencesSink(GoogleAdsRecordSink):
     def endpoint(self) -> str:
         return f"/accountTypes/GOOGLE_ADS/accounts/{self.customer_id}/userLists"
 
-    def preprocess_record(self, record: dict, context: dict) -> dict:
+    def preprocess_record(self, record: dict, _context: dict) -> dict:
         display_name = record.get("displayName") or record.get("name")
         if not display_name:
-            raise ValueError("Audiences records require displayName (or name)")
+            raise ValueError(_DISPLAY_NAME_REQUIRED)
 
         membership_duration = record.get("membershipDuration", DEFAULT_MEMBERSHIP_DURATION)
         if membership_duration:
@@ -125,7 +127,7 @@ class AudiencesSink(GoogleAdsRecordSink):
         }
         return self.clean_payload(payload)
 
-    def upsert_record(self, record: dict, context: dict) -> tuple:
+    def upsert_record(self, record: dict, _context: dict) -> tuple:
         headers = {}
         if self.login_account_id:
             headers["login-account"] = f"accountTypes/GOOGLE_ADS/accounts/{self.login_account_id}"
@@ -152,10 +154,11 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
             or self.config.get("product_destination_id")
         )
         if not product_destination_id:
-            raise ValueError(
+            message = (
                 f"{self.name} records require productDestinationId "
                 "(or audienceId / userListId / config product_destination_id)"
             )
+            raise ValueError(message)
 
         external_id = record.get("externalId") or record.get("id")
         return {
@@ -218,14 +221,14 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
         state_updates = []
         for result in response:
             if "error" in result:
-                for item in result["records"]:
-                    state_updates.append(
-                        {
-                            "externalId": item.get("_externalId"),
-                            "success": False,
-                            "error": result["error"],
-                        }
-                    )
+                state_updates.extend(
+                    {
+                        "externalId": item.get("_externalId"),
+                        "success": False,
+                        "error": result["error"],
+                    }
+                    for item in result["records"]
+                )
                 continue
 
             api_response = result["response"]
@@ -261,10 +264,11 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
 
         user_identifiers = self._collect_user_identifiers(record)
         if not user_identifiers:
-            raise ValueError(
+            message = (
                 f"{self.name} records require email/emails, phoneNumber/"
                 "phoneNumbers, userIdentifiers, userData, or compositeData"
             )
+            raise ValueError(message)
         return {"compositeData": {"userData": {"userIdentifiers": user_identifiers}}}
 
     def _normalize_user_data(self, user_data: dict) -> dict:
@@ -276,25 +280,27 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
         }
 
     def _collect_user_identifiers(self, record: dict) -> list[dict]:
-        identifiers: list[dict] = []
-
-        for identifier in record.get("userIdentifiers") or []:
-            identifiers.append(self._normalize_user_identifier(identifier))
+        identifiers: list[dict] = [
+            self._normalize_user_identifier(identifier)
+            for identifier in record.get("userIdentifiers") or []
+        ]
 
         emails = record.get("emails") or []
         if record.get("email"):
             emails = [record["email"], *emails]
-        for email in emails:
-            if email:
-                identifiers.append({"emailAddress": normalize_and_hash_email(str(email))})
+        identifiers.extend(
+            {"emailAddress": normalize_and_hash_email(str(email))} for email in emails if email
+        )
 
         phones = record.get("phoneNumbers") or []
         phone = record.get("phoneNumber") or record.get("phone")
         if phone:
             phones = [phone, *phones]
-        for phone_number in phones:
-            if phone_number:
-                identifiers.append({"phoneNumber": normalize_and_hash_phone(str(phone_number))})
+        identifiers.extend(
+            {"phoneNumber": normalize_and_hash_phone(str(phone_number))}
+            for phone_number in phones
+            if phone_number
+        )
 
         return identifiers
 
