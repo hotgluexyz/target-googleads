@@ -14,10 +14,17 @@ class GoogleAdsSink(HotglueBaseSink):
     base_url = "https://datamanager.googleapis.com/v1"
     auth_state = {}
 
-    @property
-    def authenticator(self) -> Any:
-        authenticator, auth_endpoint = self._target.access_token_support(self._target)
-        return authenticator(self._target, self.auth_state, auth_endpoint)
+    def __init__(
+        self,
+        target: Any,
+        stream_name: str,
+        schema: dict,
+        key_properties: list[str] | None,
+    ) -> None:
+        """Build one authenticator and reuse it for every request from this sink."""
+        super().__init__(target, stream_name, schema, key_properties)
+        authenticator_class, auth_endpoint = target.access_token_support(target)
+        self.authenticator = authenticator_class(target, self.auth_state, auth_endpoint)
 
     @property
     def customer_id(self) -> str:
