@@ -7,6 +7,8 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from hotglue_singer_sdk.exceptions import FatalAPIError, RetriableAPIError
+
 from target_googleads.client import GoogleAdsBatchSink, GoogleAdsRecordSink
 
 _SECONDS_PER_DAY = 86400
@@ -25,6 +27,14 @@ _GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
 _INVALID_EMAIL = "Email address must be of the form user@domain"
 _INVALID_PHONE = "Phone number contains no digits"
 MAX_MEMBERS_PER_REQUEST = 10000
+
+
+def _api_error_message(exc: FatalAPIError | RetriableAPIError) -> str:
+    """Return the API body when the exception kept the response."""
+    response = getattr(exc, "response", None)
+    if response is not None and response.text:
+        return response.text
+    return str(exc)
 
 
 def _membership_duration(value: str) -> str:
@@ -159,8 +169,9 @@ class AudienceMembersSink(GoogleAdsBatchSink):
     def make_batch_request(self, records: list[dict]) -> list[dict[str, Any]]:
         """Send one ingest request per productDestinationId group.
 
-        Returns a list of ``{"records": ..., "response": ...}`` for
-        ``handle_batch_response``.
+        A 4xx, or a 429/5xx after retries, is stored on that group and the
+        remaining groups are still sent. Returns ``{"records", "response"}``
+        or ``{"records", "error"}`` for ``handle_batch_response``.
         """
         groups: dict[str, list[dict]] = defaultdict(list)
         for record in records:
@@ -192,20 +203,39 @@ class AudienceMembersSink(GoogleAdsBatchSink):
                     "customerMatchTermsOfServiceStatus": "ACCEPTED",
                 },
             }
-            response = self.request_api("POST", self.endpoint, request_data=payload)
+            try:
+                response = self.request_api("POST", self.endpoint, request_data=payload)
+            except (FatalAPIError, RetriableAPIError) as exc:
+                error = _api_error_message(exc)
+                self.logger.exception(
+                    "Audience ingest failed for productDestinationId %s: %s",
+                    product_destination_id,
+                    error,
+                )
+                results.append({"records": group, "error": error})
+                continue
             results.append({"records": group, "response": response})
         return results
 
     def handle_batch_response(self, response: list[dict[str, Any]]) -> dict:
         state_updates = []
         for result in response:
+            if "error" in result:
+                for item in result["records"]:
+                    state_updates.append(
+                        {
+                            "externalId": item.get("_externalId"),
+                            "success": False,
+                            "error": result["error"],
+                        }
+                    )
+                continue
+
             api_response = result["response"]
             body = api_response.json() if api_response.content else {}
             request_id = body.get("requestId")
             warnings = body.get("fieldWarnings") or []
-            warning_message = None
-            if warnings:
-                warning_message = str(warnings)
+            warning_message = str(warnings) if warnings else None
 
             for item in result["records"]:
                 state = {
@@ -215,8 +245,6 @@ class AudienceMembersSink(GoogleAdsBatchSink):
                 }
                 if warning_message:
                     state["warning"] = warning_message
-                if not api_response.ok:
-                    state["error"] = body or api_response.text
                 state_updates.append(state)
         return {"state_updates": state_updates}
 
