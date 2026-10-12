@@ -17,6 +17,9 @@ DEFAULT_INGESTED_USER_LIST_INFO = {
     "uploadKeyTypes": ["CONTACT_ID"],
 }
 _HEX_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
+_GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
+_INVALID_EMAIL = "Email address must be of the form user@domain"
+_INVALID_PHONE = "Phone number contains no digits"
 MAX_MEMBERS_PER_REQUEST = 10000
 
 
@@ -29,22 +32,40 @@ def _sha256_hex(value: str) -> str:
 
 
 def normalize_and_hash_email(email: str) -> str:
-    """Normalize email (trim + lowercase) and SHA-256 hex-encode it."""
+    """Normalize an email per Data Manager rules and return its SHA-256 hex digest.
+
+    Whitespace is removed and the address is lowercased. For ``gmail.com`` and
+    ``googlemail.com``, dots and ``+`` tags in the local part are removed.
+    A value that is already a 64-character hex digest is returned unchanged.
+    """
     if _is_hashed(email):
         return email.lower()
-    return _sha256_hex(email.strip().lower())
+
+    normalized = re.sub(r"\s+", "", email).lower()
+    local, separator, domain = normalized.partition("@")
+    if not separator or not local or not domain or "@" in domain:
+        raise ValueError(_INVALID_EMAIL)
+    if domain in _GMAIL_DOMAINS:
+        local = local.split("+", 1)[0].replace(".", "")
+        if not local:
+            raise ValueError(_INVALID_EMAIL)
+    return _sha256_hex(f"{local}@{domain}")
 
 
 def normalize_and_hash_phone(phone: str) -> str:
-    """Normalize phone toward E.164 digits and SHA-256 hex-encode it."""
+    """Normalize a phone number to E.164 and return its SHA-256 hex digest.
+
+    Non-digits are removed and a leading ``+`` is added. The digits must already
+    include the country code. A value that is already a 64-character hex digest
+    is returned unchanged.
+    """
     if _is_hashed(phone):
         return phone.lower()
-    cleaned = phone.strip()
-    if cleaned.startswith("+"):
-        normalized = "+" + re.sub(r"\D", "", cleaned[1:])
-    else:
-        normalized = re.sub(r"\D", "", cleaned)
-    return _sha256_hex(normalized)
+
+    digits = re.sub(r"\D", "", phone)
+    if not digits:
+        raise ValueError(_INVALID_PHONE)
+    return _sha256_hex(f"+{digits}")
 
 
 class AudiencesSink(GoogleAdsRecordSink):
