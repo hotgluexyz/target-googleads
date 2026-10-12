@@ -5,14 +5,14 @@ from __future__ import annotations
 from hotglue_singer_sdk import typing as th
 from hotglue_singer_sdk.target_sdk.target import TargetHotglue
 from target_googleads.auth import GoogleAdsAuthenticator
-from target_googleads.sinks import AudienceMembersSink, AudiencesSink
+from target_googleads.sinks import AudienceMembersSink, AudiencesSink, RemoveAudienceMembersSink
 
 
 class TargetGoogleAds(TargetHotglue):
     """Target for GoogleAds."""
 
     name = "target-googleads"
-    SINK_TYPES = [AudiencesSink, AudienceMembersSink]
+    SINK_TYPES = [AudiencesSink, AudienceMembersSink, RemoveAudienceMembersSink]
 
     config_jsonschema = th.PropertiesList(
         th.Property(
@@ -66,7 +66,7 @@ class TargetGoogleAds(TargetHotglue):
             required=False,
             description=(
                 "Default Customer Match user list ID used as productDestinationId "
-                "for AudienceMembers when not set on the record"
+                "for AudienceMembers and RemoveAudienceMembers when not set on the record"
             ),
         ),
     ).to_dict()

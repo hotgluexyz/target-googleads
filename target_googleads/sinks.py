@@ -139,11 +139,9 @@ class AudiencesSink(GoogleAdsRecordSink):
         return record_id, response.ok, state_updates
 
 
-class AudienceMembersSink(GoogleAdsBatchSink):
-    """Ingest hashed contact identifiers into a Customer Match audience."""
+class AudienceMembersBatchSink(GoogleAdsBatchSink):
+    """Send hashed contact identifiers to a Customer Match audience endpoint."""
 
-    name = "AudienceMembers"
-    endpoint = "/audienceMembers:ingest"
     max_size = MAX_MEMBERS_PER_REQUEST
 
     def process_batch_record(self, record: dict, _index: int) -> dict:
@@ -155,7 +153,7 @@ class AudienceMembersSink(GoogleAdsBatchSink):
         )
         if not product_destination_id:
             raise ValueError(
-                "AudienceMembers records require productDestinationId "
+                f"{self.name} records require productDestinationId "
                 "(or audienceId / userListId / config product_destination_id)"
             )
 
@@ -166,8 +164,12 @@ class AudienceMembersSink(GoogleAdsBatchSink):
             "member": self._build_audience_member(record),
         }
 
+    def request_fields(self) -> dict:
+        """Fields added to the shared destinations and audienceMembers body."""
+        return {}
+
     def make_batch_request(self, records: list[dict]) -> list[dict[str, Any]]:
-        """Send one ingest request per productDestinationId group.
+        """Send one request per productDestinationId group.
 
         A 4xx, or a 429/5xx after retries, is stored on that group and the
         remaining groups are still sent. Returns ``{"records", "response"}``
@@ -194,21 +196,16 @@ class AudienceMembersSink(GoogleAdsBatchSink):
             payload = {
                 "destinations": [destination],
                 "audienceMembers": [item["member"] for item in group],
-                "consent": {
-                    "adUserData": "CONSENT_GRANTED",
-                    "adPersonalization": "CONSENT_GRANTED",
-                },
                 "encoding": "HEX",
-                "termsOfService": {
-                    "customerMatchTermsOfServiceStatus": "ACCEPTED",
-                },
+                **self.request_fields(),
             }
             try:
                 response = self.request_api("POST", self.endpoint, request_data=payload)
             except (FatalAPIError, RetriableAPIError) as exc:
                 error = _api_error_message(exc)
                 self.logger.exception(
-                    "Audience ingest failed for productDestinationId %s: %s",
+                    "%s request failed for productDestinationId %s: %s",
+                    self.name,
                     product_destination_id,
                     error,
                 )
@@ -265,7 +262,7 @@ class AudienceMembersSink(GoogleAdsBatchSink):
         user_identifiers = self._collect_user_identifiers(record)
         if not user_identifiers:
             raise ValueError(
-                "AudienceMembers records require email/emails, phoneNumber/"
+                f"{self.name} records require email/emails, phoneNumber/"
                 "phoneNumbers, userIdentifiers, userData, or compositeData"
             )
         return {"compositeData": {"userData": {"userIdentifiers": user_identifiers}}}
@@ -308,3 +305,28 @@ class AudienceMembersSink(GoogleAdsBatchSink):
         if normalized.get("phoneNumber"):
             normalized["phoneNumber"] = normalize_and_hash_phone(str(normalized["phoneNumber"]))
         return normalized
+
+
+class AudienceMembersSink(AudienceMembersBatchSink):
+    """Ingest hashed contact identifiers into a Customer Match audience."""
+
+    name = "AudienceMembers"
+    endpoint = "/audienceMembers:ingest"
+
+    def request_fields(self) -> dict:
+        return {
+            "consent": {
+                "adUserData": "CONSENT_GRANTED",
+                "adPersonalization": "CONSENT_GRANTED",
+            },
+            "termsOfService": {
+                "customerMatchTermsOfServiceStatus": "ACCEPTED",
+            },
+        }
+
+
+class RemoveAudienceMembersSink(AudienceMembersBatchSink):
+    """Remove hashed contact identifiers from a Customer Match audience."""
+
+    name = "RemoveAudienceMembers"
+    endpoint = "/audienceMembers:remove"
