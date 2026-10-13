@@ -53,7 +53,7 @@ class TargetGoogleAds(TargetHotglue):
             description="Google Ads customer ID that owns the audience (with or without dashes)",
         ),
         th.Property(
-            "login_account_id",
+            "login_customer_id",
             th.StringType(),
             required=False,
             description=(

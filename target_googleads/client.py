@@ -33,12 +33,12 @@ class GoogleAdsSink(HotglueBaseSink):
         return str(self.config["customer_id"]).replace("-", "")
 
     @property
-    def login_account_id(self) -> str | None:
+    def login_customer_id(self) -> str | None:
         """Manager account customer ID without dashes, when configured."""
-        login_account_id = self.config.get("login_account_id")
-        if not login_account_id:
+        login_customer_id = self.config.get("login_customer_id")
+        if not login_customer_id:
             return None
-        return str(login_account_id).replace("-", "")
+        return str(login_customer_id).replace("-", "")
 
 
 class GoogleAdsRecordSink(GoogleAdsSink, HotglueSink):

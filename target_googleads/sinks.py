@@ -129,8 +129,8 @@ class AudiencesSink(GoogleAdsRecordSink):
 
     def upsert_record(self, record: dict, _context: dict) -> tuple:
         headers = {}
-        if self.login_account_id:
-            headers["login-account"] = f"accountTypes/GOOGLE_ADS/accounts/{self.login_account_id}"
+        if self.login_customer_id:
+            headers["login-account"] = f"accountTypes/GOOGLE_ADS/accounts/{self.login_customer_id}"
         response = self.request_api("POST", request_data=record, headers=headers)
         body = response.json() if response.content else {}
         # productDestinationId for later AudienceMembers ingest
@@ -191,10 +191,10 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
                 },
                 "productDestinationId": product_destination_id,
             }
-            if self.login_account_id:
+            if self.login_customer_id:
                 destination["loginAccount"] = {
                     "accountType": "GOOGLE_ADS",
-                    "accountId": self.login_account_id,
+                    "accountId": self.login_customer_id,
                 }
             payload = {
                 "destinations": [destination],
