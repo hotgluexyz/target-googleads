@@ -25,6 +25,13 @@ This project was generated from the Hotglue target cookiecutter with:
 Settings are defined in `config_jsonschema` on `TargetGoogleAds` in `target_googleads/target.py`.
 For this project (**OAuth2**), config includes: `client_id`, `client_secret`, `refresh_token`, and optional `access_token` / `expires_in`.
 
+`customer_id` is the Google Ads account that owns the audience. `login_customer_id` is optional. Set it to the manager (MCC) customer ID when the OAuth user belongs to a manager account that can access `customer_id`. Omit it for direct access to the client account. Dashes are ignored on both IDs.
+
+When `login_customer_id` is set:
+
+- Audience creation sends the `login-account` header `accountTypes/GOOGLE_ADS/accounts/{login_customer_id}`.
+- Audience member ingest sets `destinations[].loginAccount` to that manager account. `operatingAccount` stays `customer_id`.
+
 Inspect the live schema:
 
 ```bash

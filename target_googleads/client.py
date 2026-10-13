@@ -1,9 +1,10 @@
+# Copyright (c) 2026 Hotglue
 """HTTP client and sink base classes for GoogleAds."""
 
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
 from hotglue_singer_sdk.target_sdk.client import HotglueBaseSink, HotglueBatchSink, HotglueSink
 
@@ -12,17 +13,32 @@ class GoogleAdsSink(HotglueBaseSink):
     """GoogleAds Base target sink class for sinks."""
 
     base_url = "https://datamanager.googleapis.com/v1"
-    auth_state = {}
+    auth_state: ClassVar[dict] = {}
 
-    @property
-    def authenticator(self) -> Any:
-        authenticator, auth_endpoint = self._target.access_token_support(self._target)
-        return authenticator(self._target, self.auth_state, auth_endpoint)
+    def __init__(
+        self,
+        target: Any,
+        stream_name: str,
+        schema: dict,
+        key_properties: list[str] | None,
+    ) -> None:
+        """Build one authenticator and reuse it for every request from this sink."""
+        super().__init__(target, stream_name, schema, key_properties)
+        authenticator_class, auth_endpoint = target.access_token_support(target)
+        self.authenticator = authenticator_class(target, self.auth_state, auth_endpoint)
 
     @property
     def customer_id(self) -> str:
         """Google Ads customer ID without dashes."""
         return str(self.config["customer_id"]).replace("-", "")
+
+    @property
+    def login_customer_id(self) -> str | None:
+        """Manager account customer ID without dashes, when configured."""
+        login_customer_id = self.config.get("login_customer_id")
+        if not login_customer_id:
+            return None
+        return str(login_customer_id).replace("-", "")
 
 
 class GoogleAdsRecordSink(GoogleAdsSink, HotglueSink):
@@ -30,10 +46,10 @@ class GoogleAdsRecordSink(GoogleAdsSink, HotglueSink):
 
     name = "GoogleAdsRecordSink"
 
-    def preprocess_record(self, record: dict, context: dict) -> dict:
+    def preprocess_record(self, record: dict, _context: dict) -> dict:
         return record
 
-    def upsert_record(self, record: dict, context: dict) -> tuple:
+    def upsert_record(self, record: dict, _context: dict) -> tuple:
         response = self.request_api("POST", request_data=record)
         body = response.json() if response.content else {}
         record_id = body.get("id")
@@ -50,10 +66,7 @@ class GoogleAdsBatchSink(GoogleAdsSink, HotglueBatchSink):
 
     @abstractmethod
     def make_batch_request(self, records: list[dict]) -> Any:
-        method = "POST"
-        endpoint = self.endpoint
-        response = self.request_api(method, endpoint, request_data=records)
-        return response
+        return self.request_api("POST", self.endpoint, request_data=records)
 
     def handle_batch_response(self, _response: Any) -> dict:
         """Parse batch API response into per-record state updates.

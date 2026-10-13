@@ -61,6 +61,19 @@ allow-star-arg-any = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.tox]
+env_list = ["lint"]
+requires = ["tox>=4", "tox-uv>=1"]
+
+[tool.tox.env.lint]
+description = "Run ruff check and format"
+skip_install = true
+deps = ["ruff>=0.15"]
+commands = [
+    ["ruff", "check", "target_googleads", "tests"],
+    ["ruff", "format", "--check", "target_googleads", "tests"],
+]
+
 [build-system]
 requires = ["poetry-core>=1.0.8"]
 build-backend = "poetry.core.masonry.api"

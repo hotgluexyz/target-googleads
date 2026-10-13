@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Hotglue
 """GoogleAds target class."""
 
 from __future__ import annotations
@@ -5,14 +6,14 @@ from __future__ import annotations
 from hotglue_singer_sdk import typing as th
 from hotglue_singer_sdk.target_sdk.target import TargetHotglue
 from target_googleads.auth import GoogleAdsAuthenticator
-from target_googleads.sinks import AudienceMembersSink, AudiencesSink
+from target_googleads.sinks import AudienceMembersSink, AudiencesSink, RemoveAudienceMembersSink
 
 
 class TargetGoogleAds(TargetHotglue):
     """Target for GoogleAds."""
 
     name = "target-googleads"
-    SINK_TYPES = [AudiencesSink, AudienceMembersSink]
+    SINK_TYPES = [AudiencesSink, AudienceMembersSink, RemoveAudienceMembersSink]
 
     config_jsonschema = th.PropertiesList(
         th.Property(
@@ -49,7 +50,16 @@ class TargetGoogleAds(TargetHotglue):
             "customer_id",
             th.StringType(),
             required=True,
-            description="Google Ads customer ID (with or without dashes)",
+            description="Google Ads customer ID that owns the audience (with or without dashes)",
+        ),
+        th.Property(
+            "login_customer_id",
+            th.StringType(),
+            required=False,
+            description=(
+                "Google Ads manager (MCC) customer ID used to access customer_id. "
+                "Required when the OAuth user is on a manager account. Omit for direct access."
+            ),
         ),
         th.Property(
             "product_destination_id",
@@ -57,13 +67,17 @@ class TargetGoogleAds(TargetHotglue):
             required=False,
             description=(
                 "Default Customer Match user list ID used as productDestinationId "
-                "for AudienceMembers when not set on the record"
+                "for AudienceMembers and RemoveAudienceMembers when not set on the record"
             ),
         ),
     ).to_dict()
 
     @classmethod
-    def access_token_support(cls, connector=None):
+    def access_token_support(
+        cls,
+        _connector: object | None = None,
+    ) -> tuple[type[GoogleAdsAuthenticator], str]:
+        """Return the OAuth authenticator and Google token endpoint."""
         return (
             GoogleAdsAuthenticator,
             "https://oauth2.googleapis.com/token",

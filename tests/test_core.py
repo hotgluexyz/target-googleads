@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Hotglue
 """Tests standard target features using the built-in SDK tests library."""
 
 from __future__ import annotations
