@@ -145,6 +145,16 @@ class AudienceMembersBatchSink(GoogleAdsBatchSink):
     """Send hashed contact identifiers to a Customer Match audience endpoint."""
 
     max_size = MAX_MEMBERS_PER_REQUEST
+    relation_fields = [
+        {
+            "field": "productDestinationId",
+            "objectName": "Audiences",
+        },
+        {
+            "field": "audienceId",
+            "objectName": "Audiences",
+        },
+    ]
 
     def process_batch_record(self, record: dict, _index: int) -> dict:
         product_destination_id = (
